@@ -4,15 +4,15 @@ const getContract_market = require('./getContract.ts');
 
 config();
 
-async function createItem() {
+async function listItemAuct() {
     const contract = await getContract_market();
 
     try {
         const [acc1] = await ethers.getSigners();
 
-        console.log(`Creating item 2...`);
+        console.log(`${acc1.address} listing item 2 on auction...`);
 
-        const tx = await contract.createItem();
+        const tx = await contract.listItemOnAuction(2, ethers.parseEther("0.005"));
 
         await tx.wait();
         console.log(`Transaction finished: ${tx.hash}`);
@@ -22,7 +22,7 @@ async function createItem() {
 
 }
 
-createItem()
+listItemAuct()
     .then(() => process.exit(0))
     .catch((error) => {
         console.error(error);
