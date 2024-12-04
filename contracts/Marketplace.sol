@@ -3,9 +3,10 @@
 pragma solidity ^0.8.27;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "./NFT.sol";
 
-contract Marketplace {
+contract Marketplace is IERC721Receiver {
     NFT public nftContract;
     uint256 private curItemTokenId;
     uint256 private curAuctionId;
@@ -38,6 +39,15 @@ contract Marketplace {
         nftContract = NFT(_nftContractAddress);
     }
 
+    function onERC721Received(
+        address operator,
+        address from,
+        uint256 tokenId,
+        bytes calldata data
+    ) external override pure returns (bytes4) {
+        return this.onERC721Received.selector;
+    }
+
     function createItem() external returns(uint256) {
         curItemTokenId++;
 
@@ -48,7 +58,7 @@ contract Marketplace {
             sold: false
         });
         
-        nftContract.mint(msg.sender, curItemTokenId);
+        nftContract.mint(address(this), curItemTokenId);
 
         emit Created(msg.sender, curItemTokenId);
 
@@ -66,7 +76,7 @@ contract Marketplace {
         require(items[itemId].forSale == true, "This item not for sale");
         require(msg.value >= items[itemId].price, "Insuficient funds");
 
-        nftContract.safeTransferFrom(items[itemId].owner, msg.sender, itemId);
+        nftContract.safeTransferFrom(address(this), msg.sender, itemId);
 
         (bool success2, ) = payable(items[itemId].owner).call{ value: msg.value}("");
         require(success2, "Failed transfer funds to seller");
@@ -121,7 +131,7 @@ contract Marketplace {
             address tokenOwner = items[auctions[auctionId].tokenId].owner;
             address winner = auctions[auctionId].highestBidder;
 
-            nftContract.safeTransferFrom(tokenOwner, winner, auctions[auctionId].tokenId);
+            nftContract.safeTransferFrom(address(this), winner, auctions[auctionId].tokenId);
 
             (bool success1, ) = payable(tokenOwner).call{ value: auctions[auctionId].highestBid }("");
             require(success1, "Failed transfer funds to owner");

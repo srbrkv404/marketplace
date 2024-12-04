@@ -1,7 +1,9 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { ethers } from "hardhat";
 import { expect } from "chai";
+import { time } from "@nomicfoundation/hardhat-network-helpers";
 import "@nomicfoundation/hardhat-chai-matchers";
+import { extendEnvironment } from "hardhat/config";
 
 describe("Marketplace", function() {
 
@@ -10,11 +12,19 @@ describe("Marketplace", function() {
     async function deploy() {
         const [acc1, acc2] = await ethers.getSigners();
 
+        const NFT = await ethers.getContractFactory("NFT");
+        const nft = await NFT.deploy();
+        await nft.waitForDeployment();
+
+        const NFTAddress = await nft.getAddress();
+
         const Factory = await ethers.getContractFactory("Marketplace");
-        const marketplace = await Factory.deploy(NFTcontract);
+        const marketplace = await Factory.deploy(NFTAddress);
         await marketplace.waitForDeployment();
         
-        return { acc1, acc2, marketplace }
+        const MPAddress = await marketplace.getAddress();
+
+        return { acc1, acc2, marketplace, nft }
     }
 
     describe("Deployment", function() {
@@ -35,16 +45,6 @@ describe("Marketplace", function() {
     
                 await expect(marketplace.connect(acc2).listItem(1, ethers.parseEther("1")))
                     .to.be.revertedWith("You are not the owner");
-            });
-    
-            it("Should not allow to list sold item", async function() {
-                const { acc2, marketplace } = await loadFixture(deploy);
-        
-                await marketplace.createItem();
-                await marketplace.listItem(1, ethers.parseEther("1"));
-                await marketplace.connect(acc2).buyItem(1, { value: ethers.parseEther("1")});
-    
-                await expect(marketplace.listItem(1, ethers.parseEther("1"))).to.be.revertedWith("This item already sold");
             });
     
             it("Should not allow to list sold item", async function() {
@@ -142,6 +142,20 @@ describe("Marketplace", function() {
                 await marketplace.listItemOnAuction(1, ethers.parseEther("2"))
 
                 await expect(marketplace.connect(acc2).cancelAuction(1)).to.be.revertedWith("You are not the owner");
+            });
+
+            it("Should allow to finish auction only to owner", async function () {
+                const { acc2, marketplace } = await loadFixture(deploy);
+        
+                await marketplace.createItem();
+                await marketplace.listItemOnAuction(1, ethers.parseEther("2"))
+
+                const timestamp = await time.latest();
+                const fourDays = 4 * 24 * 60 * 60;
+
+                await time.increaseTo(timestamp + fourDays);
+
+                await expect(marketplace.connect(acc2).finishAuction(1)).to.be.revertedWith("You are not the owner");
             });
         });
     });
