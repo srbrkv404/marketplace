@@ -1,13 +1,12 @@
-/**
- *Submitted for verification at Etherscan.io on 2024-12-03
-*/
-
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.27;
 
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "./NFT.sol";
+
 contract Marketplace {
-    address private nftContract;
+    NFT public nftContract;
     uint256 private curItemTokenId;
     uint256 private curAuctionId;
 
@@ -36,7 +35,7 @@ contract Marketplace {
     event Finished(address winner, uint256 itemId, uint256 price);
 
     constructor (address _nftContractAddress) {
-        nftContract = _nftContractAddress;
+        nftContract = NFT(_nftContractAddress);
     }
 
     function createItem() external returns(uint256) {
@@ -49,8 +48,7 @@ contract Marketplace {
             sold: false
         });
         
-        (bool success, ) = nftContract.call(abi.encodeWithSignature("mintNFT(address, uint256)", msg.sender, curItemTokenId));
-        require(success, "Failed minting");
+        nftContract.mint(msg.sender, curItemTokenId);
 
         emit Created(msg.sender, curItemTokenId);
 
@@ -68,11 +66,7 @@ contract Marketplace {
         require(items[itemId].forSale == true, "This item not for sale");
         require(msg.value >= items[itemId].price, "Insuficient funds");
 
-        (bool success1, ) = nftContract.call(abi.encodeWithSignature(
-                "safeTransferFrom(address, address, uint256)",
-                items[itemId].owner, msg.sender, itemId
-            ));
-        require(success1, "Failed transfer nft to buyer");
+        nftContract.safeTransferFrom(items[itemId].owner, msg.sender, itemId);
 
         (bool success2, ) = payable(items[itemId].owner).call{ value: msg.value}("");
         require(success2, "Failed transfer funds to seller");
@@ -127,21 +121,17 @@ contract Marketplace {
             address tokenOwner = items[auctions[auctionId].tokenId].owner;
             address winner = auctions[auctionId].highestBidder;
 
-            (bool success1, ) = nftContract.call(abi.encodeWithSignature(
-                    "safeTransferFrom(address, address, uint256)",
-                    tokenOwner, winner, auctions[auctionId].tokenId
-                ));
-            require(success1, "Failed transfer nft to winner");
+            nftContract.safeTransferFrom(tokenOwner, winner, auctions[auctionId].tokenId);
 
-            (bool success2, ) = payable(tokenOwner).call{ value: auctions[auctionId].highestBid }("");
-            require(success2, "Failed transfer funds to owner");
+            (bool success1, ) = payable(tokenOwner).call{ value: auctions[auctionId].highestBid }("");
+            require(success1, "Failed transfer funds to owner");
 
             auctions[auctionId].finished = true;
             emit Finished(winner, auctions[auctionId].tokenId, auctions[auctionId].highestBid);
         } else {
             address lastBidder = auctions[auctionId].highestBidder;
-            (bool success3, ) = payable(lastBidder).call{ value: auctions[auctionId].highestBid }("");
-            require(success3, "Failed transfer funds to owner");
+            (bool success2, ) = payable(lastBidder).call{ value: auctions[auctionId].highestBid }("");
+            require(success2, "Failed transfer funds to owner");
 
             auctions[auctionId].finished = true;
             emit Finished(address(0), auctions[auctionId].tokenId, 0);
