@@ -4,15 +4,16 @@ const getContract_market = require('./getContract.ts');
 
 config();
 
-async function listItem() {
+async function setNFTAddress() {
     const contract = await getContract_market();
+    const NFTaddress = "0xb4c6a987e37611c9066d536875276871e8cbbf36";
 
     try {
         const [acc1] = await ethers.getSigners();
 
-        console.log(`Listing item 2...`);
+        console.log(`Setting nft contract address...`);
 
-        const tx = await contract.listItem(2, ethers.parseEther("0.005"));
+        const tx = await contract.setNFTcontractAddress(NFTaddress);
 
         await tx.wait();
         console.log(`Transaction finished: ${tx.hash}`);
@@ -22,7 +23,7 @@ async function listItem() {
 
 }
 
-listItem()
+setNFTAddress()
     .then(() => process.exit(0))
     .catch((error) => {
         console.error(error);

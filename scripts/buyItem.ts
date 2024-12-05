@@ -10,9 +10,9 @@ async function buyItem() {
     try {
         const [acc1, acc2] = await ethers.getSigners();
 
-        console.log(`${acc2.address} buy item 1...`);
+        console.log(`${acc2.address} buy item 2...`);
 
-        const tx = await contract.connect(acc2).buyItem(1, { value: ethers.parseEther("0.005")});
+        const tx = await contract.connect(acc2).buyItem(2, { value: ethers.parseEther("0.005")});
 
         await tx.wait();
         console.log(`Transaction finished: ${tx.hash}`);

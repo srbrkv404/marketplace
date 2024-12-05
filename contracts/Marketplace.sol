@@ -4,27 +4,28 @@ pragma solidity ^0.8.27;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import "./NFT.sol";
+import "./interfaces/INFT.sol";
 
 contract Marketplace is IERC721Receiver {
-    NFT public nftContract;
-    uint256 private curItemTokenId;
-    uint256 private curAuctionId;
+    INFT public nftContract;
+    uint256 public curItemTokenId;
+    uint256 public curAuctionId;
+    address public owner;
 
     struct Item {
         address owner;
-        uint256 price;
+        uint96 price;
         bool forSale;
         bool sold;
     }
 
     struct Auction {
         address owner;
-        uint256 tokenId;
-        uint256 highestBid;
+        uint96 tokenId;
+        uint96 highestBid;
         address highestBidder;
-        uint256 bidsNumber;
-        uint256 endTime;
+        uint128 bidsNumber;
+        uint128 endTime;
         bool finished;
     }
 
@@ -35,8 +36,13 @@ contract Marketplace is IERC721Receiver {
     event Bought(address buyer, uint256 itemId, uint256 price);
     event Finished(address winner, uint256 itemId, uint256 price);
 
-    constructor (address _nftContractAddress) {
-        nftContract = NFT(_nftContractAddress);
+    constructor () {
+        owner = msg.sender;
+    }
+
+    function setNFTcontractAddress(address address_) external {
+        require(owner == msg.sender, "You are not the owner");
+        nftContract = INFT(address_);
     }
 
     function onERC721Received(
@@ -65,7 +71,7 @@ contract Marketplace is IERC721Receiver {
         return curItemTokenId;
     }
 
-    function listItem(uint256 itemId, uint256 price_) external notSold(itemId) {
+    function listItem(uint256 itemId, uint96 price_) external notSold(itemId) {
         require(items[itemId].owner == msg.sender, "You are not the owner");
 
         items[itemId].price = price_;
@@ -76,13 +82,16 @@ contract Marketplace is IERC721Receiver {
         require(items[itemId].forSale == true, "This item not for sale");
         require(msg.value >= items[itemId].price, "Insuficient funds");
 
-        nftContract.safeTransferFrom(address(this), msg.sender, itemId);
+        if (msg.value > items[itemId].price) {
+            _refund(msg.sender, msg.value - items[itemId].price);
+        }
+
+        nftContract._safeTransferFrom(address(this), msg.sender, itemId);
 
         (bool success2, ) = payable(items[itemId].owner).call{ value: msg.value}("");
         require(success2, "Failed transfer funds to seller");
 
         items[itemId].sold = true;
-
 
         emit Bought(msg.sender, itemId, items[itemId].price);
     }
@@ -94,7 +103,7 @@ contract Marketplace is IERC721Receiver {
         items[itemId].forSale = false;
     }
 
-    function listItemOnAuction(uint256 itemId, uint256 startPrice) external notSold(itemId) returns(uint256) {
+    function listItemOnAuction(uint96 itemId, uint96 startPrice) external notSold(itemId) returns(uint256) {
         require(items[itemId].forSale == false, "This item for sale");
         require(items[itemId].owner == msg.sender, "You are not the owner");
 
@@ -105,7 +114,7 @@ contract Marketplace is IERC721Receiver {
             highestBid: startPrice,
             highestBidder: msg.sender,
             bidsNumber: 0,
-            endTime: block.timestamp + 3 days,
+            endTime: uint128(block.timestamp + 3 days),
             finished: false
         });
         return curAuctionId;
@@ -119,7 +128,7 @@ contract Marketplace is IERC721Receiver {
         require(success, "Failed transfer funds to bidder");
 
         auctions[auctionId].highestBidder = msg.sender;
-        auctions[auctionId].highestBid = msg.value;
+        auctions[auctionId].highestBid = uint96(msg.value);
         auctions[auctionId].bidsNumber++;
     }
 
@@ -131,7 +140,7 @@ contract Marketplace is IERC721Receiver {
             address tokenOwner = items[auctions[auctionId].tokenId].owner;
             address winner = auctions[auctionId].highestBidder;
 
-            nftContract.safeTransferFrom(address(this), winner, auctions[auctionId].tokenId);
+            nftContract._safeTransferFrom(address(this), winner, auctions[auctionId].tokenId);
 
             (bool success1, ) = payable(tokenOwner).call{ value: auctions[auctionId].highestBid }("");
             require(success1, "Failed transfer funds to owner");
@@ -158,6 +167,11 @@ contract Marketplace is IERC721Receiver {
 
         auctions[auctionId].finished = true;
         emit Finished(address(0), auctions[auctionId].tokenId, 0);
+    }
+
+    function _refund(address to, uint256 value_) internal {
+        (bool success, ) = payable(to).call{ value: value_ }("");
+        require(success, "Failed transfer funds to owner");
     }
 
     modifier notSold(uint256 itemId) {

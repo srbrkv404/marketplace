@@ -7,30 +7,30 @@ import { extendEnvironment } from "hardhat/config";
 
 describe("Marketplace", function() {
 
-    const NFTcontract = "0x7236E78Cc1F6B9b0739a7094f133e08c702b6BA3";
-
     async function deploy() {
         const [acc1, acc2] = await ethers.getSigners();
+        
+        const Factory = await ethers.getContractFactory("Marketplace");
+        const marketplace = await Factory.deploy();
+        await marketplace.waitForDeployment();
 
+        const MPAddress = await marketplace.getAddress();
+        
         const NFT = await ethers.getContractFactory("NFT");
-        const nft = await NFT.deploy();
+        const nft = await NFT.deploy(MPAddress);
         await nft.waitForDeployment();
 
         const NFTAddress = await nft.getAddress();
 
-        const Factory = await ethers.getContractFactory("Marketplace");
-        const marketplace = await Factory.deploy(NFTAddress);
-        await marketplace.waitForDeployment();
-        
-        const MPAddress = await marketplace.getAddress();
+        await marketplace.setNFTcontractAddress(NFTAddress);
 
-        return { acc1, acc2, marketplace, nft }
+        return { acc1, acc2, marketplace, MPAddress}
     }
 
     describe("Deployment", function() {
         it("Should be deployed", async function() {
             const { marketplace } = await loadFixture(deploy);
-    
+
             expect(marketplace.target).to.be.properAddress;
         });
     });
